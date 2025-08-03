@@ -1,3 +1,4 @@
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { type Summary } from "@/lib/data";
@@ -30,17 +31,23 @@ export function SummaryCard({ summary }: { summary: Summary }) {
         </div>
       </CardHeader>
       <CardContent className="flex-grow">
-        <div className="space-y-3">
-          <h3 className="flex items-center font-semibold text-md">
-            <ListChecks className="w-5 h-5 mr-2 text-primary" />
-            AI Summary
-          </h3>
-          <ul className="space-y-2 pl-5 list-disc text-sm text-muted-foreground">
-            {summary.summaryPoints.map((point, index) => (
-              <li key={index} className="leading-relaxed">{point}</li>
-            ))}
-          </ul>
-        </div>
+        <Accordion type="single" collapsible>
+          <AccordionItem value="item-1" className="border-b-0">
+            <AccordionTrigger className="py-0">
+              <h3 className="flex items-center font-semibold text-md">
+                <ListChecks className="w-5 h-5 mr-2 text-primary" />
+                AI Summary
+              </h3>
+            </AccordionTrigger>
+            <AccordionContent>
+              <ul className="space-y-2 pt-2 pl-5 list-disc text-sm text-muted-foreground">
+                {summary.summaryPoints.map((point, index) => (
+                  <li key={index} className="leading-relaxed">{point}</li>
+                ))}
+              </ul>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </CardContent>
       <CardFooter>
         <p className="text-xs text-muted-foreground">{summary.publishedAt}</p>

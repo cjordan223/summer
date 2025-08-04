@@ -50,7 +50,16 @@ const summarizeVideoFlow = ai.defineFlow(
     outputSchema: SummarizeVideoOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
+    try {
+      const {output} = await prompt(input);
+      return output!;
+    } catch (error) {
+      console.error('AI summarization error:', error);
+      
+      // Return a fallback summary if AI service is unavailable
+      return {
+        summary: `• ${input.videoTitle} - Video summary temporarily unavailable due to AI service overload.\n• Please try again later or check the video directly on YouTube.\n• This is a fallback response while the AI service is being restored.`
+      };
+    }
   }
 );

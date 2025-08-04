@@ -1,23 +1,11 @@
 'use client';
 
-import { 
-  getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  signOut, 
-  onAuthStateChanged,
-  User 
-} from 'firebase/auth';
-import { createContext, useContext, useEffect, useState } from 'react';
-import { firebaseApp } from './firebase';
-
-// Initialize Firebase Auth
-const auth = getAuth(firebaseApp);
-const googleProvider = new GoogleAuthProvider();
+import { SessionProvider, useSession, signIn, signOut } from 'next-auth/react';
+import { createContext, useContext } from 'react';
 
 // Authentication context
 interface AuthContextType {
-  user: User | null;
+  user: any;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
@@ -25,22 +13,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
+function AuthProviderInner({ children }: { children: React.ReactNode }) {
+  const { data: session, status } = useSession();
 
   const signInWithGoogle = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      await signIn('google');
     } catch (error) {
       console.error('Error signing in with Google:', error);
       throw error;
@@ -49,17 +27,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await signOut(auth);
+      await signOut();
     } catch (error) {
       console.error('Error signing out:', error);
       throw error;
     }
   };
 
+  const value: AuthContextType = {
+    user: session?.user || null,
+    loading: status === 'loading',
+    signInWithGoogle,
+    logout,
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
+  );
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <SessionProvider>
+      <AuthProviderInner>
+        {children}
+      </AuthProviderInner>
+    </SessionProvider>
   );
 }
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { SummaryCard } from "@/components/dashboard/summary-card";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/nextauth";
 import { userService, UserSummary } from "@/lib/user-service";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ export default function DashboardPage() {
     
     try {
       setLoading(true);
-      const userSummaries = await userService.getUserSummaries(user.uid);
+      const userSummaries = await userService.getUserSummaries(user.email || user.id || '');
       setSummaries(userSummaries);
     } catch (error) {
       console.error('Error loading summaries:', error);

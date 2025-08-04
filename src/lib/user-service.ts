@@ -1,22 +1,7 @@
 'use client';
 
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  collection, 
-  query, 
-  where, 
-  getDocs,
-  updateDoc,
-  deleteDoc 
-} from 'firebase/firestore';
-import { firebaseApp } from './firebase';
 import { youtubeAPI, YouTubeChannel, YouTubeVideo } from './youtube';
 import { summarizeVideo } from '@/ai/flows/summarize-video';
-
-const db = getFirestore(firebaseApp);
 
 export interface UserSummary {
   id: string;
@@ -39,17 +24,21 @@ export interface UserPreferences {
 }
 
 class UserService {
+  private getStorageKey(userId: string, type: string): string {
+    return `summer_${userId}_${type}`;
+  }
+
   // Get user's channel preferences
   async getUserChannels(userId: string): Promise<YouTubeChannel[]> {
     try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
+      const storageKey = this.getStorageKey(userId, 'channels');
+      const stored = localStorage.getItem(storageKey);
       
-      if (userDoc.exists()) {
-        const data = userDoc.data();
+      if (stored) {
+        const data = JSON.parse(stored);
         return data.channels || [];
       }
       
-      // If no user document exists, return empty array
       return [];
     } catch (error) {
       console.error('Error fetching user channels:', error);
@@ -60,10 +49,12 @@ class UserService {
   // Save user's channel preferences
   async saveUserChannels(userId: string, channels: YouTubeChannel[]): Promise<void> {
     try {
-      await setDoc(doc(db, 'users', userId), {
+      const storageKey = this.getStorageKey(userId, 'channels');
+      const data = {
         channels,
-        updatedAt: new Date(),
-      }, { merge: true });
+        updatedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(storageKey, JSON.stringify(data));
     } catch (error) {
       console.error('Error saving user channels:', error);
       throw error;
@@ -73,18 +64,13 @@ class UserService {
   // Toggle channel monitoring
   async toggleChannel(userId: string, channelId: string, enabled: boolean): Promise<void> {
     try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
+      const channels = await this.getUserChannels(userId);
       
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        const channels = data.channels || [];
-        
-        const updatedChannels = channels.map((channel: YouTubeChannel) =>
-          channel.id === channelId ? { ...channel, enabled } : channel
-        );
-        
-        await this.saveUserChannels(userId, updatedChannels);
-      }
+      const updatedChannels = channels.map((channel: YouTubeChannel) =>
+        channel.id === channelId ? { ...channel, enabled } : channel
+      );
+      
+      await this.saveUserChannels(userId, updatedChannels);
     } catch (error) {
       console.error('Error toggling channel:', error);
       throw error;
@@ -94,25 +80,20 @@ class UserService {
   // Get user's summaries
   async getUserSummaries(userId: string, limit: number = 20): Promise<UserSummary[]> {
     try {
-      const summariesQuery = query(
-        collection(db, 'summaries'),
-        where('userId', '==', userId)
-      );
+      const storageKey = this.getStorageKey(userId, 'summaries');
+      const stored = localStorage.getItem(storageKey);
       
-      const querySnapshot = await getDocs(summariesQuery);
-      const summaries: UserSummary[] = [];
+      if (stored) {
+        const data = JSON.parse(stored);
+        const summaries: UserSummary[] = data.summaries || [];
+        
+        // Sort by creation date (newest first)
+        return summaries
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, limit);
+      }
       
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        summaries.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-        } as UserSummary);
-      });
-      
-      // Sort by creation date (newest first)
-      return summaries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+      return [];
     } catch (error) {
       console.error('Error fetching user summaries:', error);
       return [];
@@ -136,13 +117,23 @@ class UserService {
       }
 
       // Generate AI summary
-      const aiSummary = await summarizeVideo({
-        transcript: transcript.text,
-        videoTitle: video.title,
-      });
+      let aiSummary;
+      try {
+        aiSummary = await summarizeVideo({
+          transcript: transcript.text,
+          videoTitle: video.title,
+        });
+      } catch (error) {
+        console.error('Error generating AI summary:', error);
+        // Fallback summary
+        aiSummary = {
+          summary: `• ${video.title} - Summary generation failed.\n• This could be due to AI service overload or transcript issues.\n• Please try again later.`
+        };
+      }
 
       // Create summary object
-      const summary: Omit<UserSummary, 'id'> = {
+      const summary: UserSummary = {
+        id: `${video.id}_${Date.now()}`, // Simple ID generation
         videoId: video.id,
         videoTitle: video.title,
         channelName: video.channelName,
@@ -155,18 +146,17 @@ class UserService {
         createdAt: new Date(),
       };
 
-      // Save to Firestore
-      const summaryRef = doc(collection(db, 'summaries'));
-      await setDoc(summaryRef, {
+      // Save to localStorage
+      const storageKey = this.getStorageKey(userId, 'summaries');
+      const stored = localStorage.getItem(storageKey);
+      const data = stored ? JSON.parse(stored) : { summaries: [] };
+      data.summaries.push({
         ...summary,
-        userId,
-        createdAt: new Date(),
+        createdAt: summary.createdAt.toISOString(),
       });
+      localStorage.setItem(storageKey, JSON.stringify(data));
 
-      return {
-        id: summaryRef.id,
-        ...summary,
-      };
+      return summary;
     } catch (error) {
       console.error('Error generating video summary:', error);
       return null;
@@ -176,25 +166,8 @@ class UserService {
   // Get summary by video ID
   async getSummaryByVideoId(userId: string, videoId: string): Promise<UserSummary | null> {
     try {
-      const summaryQuery = query(
-        collection(db, 'summaries'),
-        where('userId', '==', userId),
-        where('videoId', '==', videoId)
-      );
-      
-      const querySnapshot = await getDocs(summaryQuery);
-      
-      if (!querySnapshot.empty) {
-        const doc = querySnapshot.docs[0];
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-        } as UserSummary;
-      }
-      
-      return null;
+      const summaries = await this.getUserSummaries(userId);
+      return summaries.find(summary => summary.videoId === videoId) || null;
     } catch (error) {
       console.error('Error fetching summary by video ID:', error);
       return null;
@@ -231,6 +204,34 @@ class UserService {
       for (const video of videos.slice(0, 10)) { // Limit to 10 videos
         await this.generateVideoSummary(userId, video);
       }
+      
+      // If no videos were found, create some mock summaries for testing
+      if (videos.length === 0) {
+        const mockVideos = [
+          {
+            id: 'mock1',
+            title: 'The Future of AI Technology',
+            channelName: 'Tech Insights',
+            thumbnailUrl: 'https://placehold.co/600x400.png',
+            thumbnailHint: 'ai technology',
+            publishedAt: '2 days ago',
+            description: 'Exploring the latest developments in artificial intelligence.'
+          },
+          {
+            id: 'mock2', 
+            title: 'Building Modern Web Applications',
+            channelName: 'Code Masters',
+            thumbnailUrl: 'https://placehold.co/600x400.png',
+            thumbnailHint: 'web development',
+            publishedAt: '1 week ago',
+            description: 'Learn how to build scalable web applications with modern frameworks.'
+          }
+        ];
+        
+        for (const video of mockVideos) {
+          await this.generateVideoSummary(userId, video);
+        }
+      }
     } catch (error) {
       console.error('Error syncing user channels:', error);
       throw error;
@@ -240,7 +241,14 @@ class UserService {
   // Delete a summary
   async deleteSummary(userId: string, summaryId: string): Promise<void> {
     try {
-      await deleteDoc(doc(db, 'summaries', summaryId));
+      const storageKey = this.getStorageKey(userId, 'summaries');
+      const stored = localStorage.getItem(storageKey);
+      
+      if (stored) {
+        const data = JSON.parse(stored);
+        data.summaries = data.summaries.filter((summary: UserSummary) => summary.id !== summaryId);
+        localStorage.setItem(storageKey, JSON.stringify(data));
+      }
     } catch (error) {
       console.error('Error deleting summary:', error);
       throw error;

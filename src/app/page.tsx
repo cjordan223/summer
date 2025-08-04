@@ -3,7 +3,7 @@
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/nextauth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 

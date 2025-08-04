@@ -14,7 +14,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/nextauth";
 
 export default function DashboardLayout({
   children,
@@ -60,11 +60,11 @@ export default function DashboardLayout({
         <SidebarFooter>
           <div className="flex items-center gap-3 p-3 border-t">
             <Avatar className="h-9 w-9">
-              <AvatarImage src={user.photoURL || undefined} alt={user.displayName || "User"} data-ai-hint="person" />
-              <AvatarFallback>{user.displayName?.[0] || user.email?.[0] || "U"}</AvatarFallback>
+              <AvatarImage src={user.image || undefined} alt={user.name || "User"} data-ai-hint="person" />
+              <AvatarFallback>{user.name?.[0] || user.email?.[0] || "U"}</AvatarFallback>
             </Avatar>
             <div className="flex-1">
-              <p className="text-sm font-semibold truncate">{user.displayName || "User"}</p>
+              <p className="text-sm font-semibold truncate">{user.name || "User"}</p>
               <p className="text-xs text-muted-foreground truncate">{user.email}</p>
             </div>
             <Button 

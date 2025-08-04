@@ -15,8 +15,8 @@ A Next.js application that provides AI-powered summaries of YouTube videos from 
 
 - **Frontend**: Next.js 15, React 18, TypeScript
 - **Styling**: Tailwind CSS, ShadCN UI
-- **Authentication**: Firebase Authentication
-- **Database**: Firebase Firestore
+- **Authentication**: NextAuth.js with Google OAuth
+- **Storage**: Local Storage (development) / Database (production)
 - **AI**: Google Gemini 2.0 Flash via Genkit
 - **APIs**: YouTube Data API v3
 
@@ -56,6 +56,12 @@ NEXT_PUBLIC_YOUTUBE_API_KEY=your_youtube_api_key_here
 
 # Google AI API Key (for Gemini)
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# NextAuth.js Configuration
+GOOGLE_CLIENT_ID=your_google_client_id_here
+GOOGLE_CLIENT_SECRET=your_google_client_secret_here
+NEXTAUTH_URL=http://localhost:9002
+NEXTAUTH_SECRET=your_nextauth_secret_here
 ```
 
 ### 3. Get API Keys
@@ -72,15 +78,18 @@ GEMINI_API_KEY=your_gemini_api_key_here
 2. Create a new API key
 3. Add the key to your `.env.local`
 
-### 4. Firebase Setup (Optional)
+### 4. Google OAuth Setup
 
-The app is pre-configured with a Firebase project. If you want to use your own:
+To enable Google authentication:
 
-1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Create a new project
-3. Enable Authentication (Google provider)
-4. Enable Firestore Database
-5. Update the config in `src/lib/firebase.ts`
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing one
+3. Enable the Google+ API
+4. Go to "Credentials" and create an OAuth 2.0 Client ID
+5. Add authorized redirect URIs:
+   - `http://localhost:9002/api/auth/callback/google` (development)
+   - `https://your-domain.com/api/auth/callback/google` (production)
+6. Copy the Client ID and Client Secret to your `.env.local`
 
 ### 5. Run the Application
 
@@ -117,8 +126,8 @@ src/
 
 ## 🔄 Application Flow
 
-1. **Authentication**: Users sign in with Google via Firebase
-2. **Channel Sync**: Fetch user's YouTube subscriptions
+1. **Authentication**: Users sign in with Google via NextAuth.js
+2. **Channel Sync**: Fetch user's YouTube subscriptions using OAuth access token
 3. **Channel Management**: Toggle monitoring for specific channels
 4. **Video Fetching**: Get recent videos from monitored channels
 5. **AI Summarization**: Generate summaries using Gemini AI

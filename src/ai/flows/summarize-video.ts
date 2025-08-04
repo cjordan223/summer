@@ -34,11 +34,20 @@ const prompt = ai.definePrompt({
   name: 'summarizeVideoPrompt',
   input: {schema: SummarizeVideoInputSchema},
   output: {schema: SummarizeVideoOutputSchema},
-  prompt: `You are an expert YouTube video summarizer. You take a transcript of the video and create a bullet point summary.
+  prompt: `You are an expert YouTube video summarizer. You can create bullet point summaries from either video transcripts or video metadata (title, description, tags, etc.).
+
+When given a transcript, create a detailed summary of the video content.
+When given metadata only, create a summary based on the available information and make it clear that it's based on limited data.
 
 Title: {{{videoTitle}}}
 
-Transcript: {{{transcript}}}
+Content (transcript or metadata): {{{transcript}}}
+
+Instructions:
+- Create 3-5 bullet points summarizing the key information
+- If working from metadata only, start with "• Based on video metadata:"
+- Focus on the most important aspects of the video
+- Keep each bullet point concise but informative
 
 Summary:`,
 });
@@ -56,9 +65,25 @@ const summarizeVideoFlow = ai.defineFlow(
     } catch (error) {
       console.error('AI summarization error:', error);
       
-      // Return a fallback summary if AI service is unavailable
+      // If it's a service overload error, try again with a delay
+      if (error.message?.includes('overloaded') || error.status === 503) {
+        console.log('AI service overloaded, retrying in 2 seconds...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        try {
+          const {output} = await prompt(input);
+          return output!;
+        } catch (retryError) {
+          console.error('Retry failed:', retryError);
+        }
+      }
+      
+      // If all else fails, return a simple summary based on the transcript
+      const transcriptLines = input.transcript.split('\n').filter(line => line.trim().length > 0);
+      const keyPoints = transcriptLines.slice(0, 5).map(line => `• ${line.trim()}`);
+      
       return {
-        summary: `• ${input.videoTitle} - Video summary temporarily unavailable due to AI service overload.\n• Please try again later or check the video directly on YouTube.\n• This is a fallback response while the AI service is being restored.`
+        summary: keyPoints.join('\n') + '\n\n• Summary generated from transcript (AI service temporarily unavailable)'
       };
     }
   }

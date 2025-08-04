@@ -38,6 +38,8 @@ class YouTubeAPI {
   // Get user's subscribed channels
   async getSubscribedChannels(accessToken: string): Promise<YouTubeChannel[]> {
     try {
+      console.log('🔍 Fetching subscribed channels from YouTube API...');
+      
       const response = await fetch(
         `${this.baseUrl}/subscriptions?part=snippet&mine=true&maxResults=50&key=${this.apiKey}`,
         {
@@ -49,20 +51,29 @@ class YouTubeAPI {
       );
 
       if (!response.ok) {
+        console.error('❌ YouTube API error:', response.status, response.statusText);
         throw new Error(`Failed to fetch subscriptions: ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log('📊 YouTube API response:', {
+        totalResults: data.pageInfo?.totalResults,
+        resultsPerPage: data.pageInfo?.resultsPerPage,
+        itemsCount: data.items?.length
+      });
       
-      return data.items.map((item: any) => ({
+      const channels = data.items.map((item: any) => ({
         id: item.snippet.resourceId.channelId,
         name: item.snippet.title,
         avatarUrl: item.snippet.thumbnails?.default?.url || 'https://placehold.co/40x40.png',
         avatarHint: item.snippet.title.toLowerCase().replace(/\s+/g, ' '),
         enabled: true, // Default to enabled
       }));
+      
+      console.log('✅ Successfully fetched channels:', channels.length);
+      return channels;
     } catch (error) {
-      console.error('Error fetching subscribed channels:', error);
+      console.error('❌ Error fetching subscribed channels:', error);
       // Return mock data as fallback
       return this.getMockChannels();
     }
@@ -97,40 +108,170 @@ class YouTubeAPI {
     }
   }
 
-  // Get video transcript (this is a simplified version - real implementation would need more complex logic)
+  // Get video transcript using youtube-transcript
   async getVideoTranscript(videoId: string): Promise<VideoTranscript | null> {
     try {
-      // Note: YouTube doesn't provide transcripts via their public API
-      // This would typically require:
-      // 1. Scraping the video page for captions
-      // 2. Using a third-party service
-      // 3. Or using YouTube's internal APIs (requires special access)
+      // Dynamic import to avoid SSR issues
+      const { YoutubeTranscript } = await import('youtube-transcript');
       
-      // For now, we'll return a mock transcript
-      return this.getMockTranscript(videoId);
+      console.log(`🎬 Fetching transcript for video: ${videoId}`);
+      
+      const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId);
+      
+      if (!transcriptItems || transcriptItems.length === 0) {
+        console.warn(`❌ No transcript found for video: ${videoId}`);
+        return null;
+      }
+      
+      // Combine all transcript items into a single text
+      const transcriptText = transcriptItems
+        .map(item => item.text)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      console.log(`✅ Transcript fetched successfully. Length: ${transcriptText.length} characters`);
+      
+      return {
+        text: transcriptText,
+        language: 'en' // Most transcripts are in English
+      };
     } catch (error) {
-      console.error('Error fetching video transcript:', error);
+      console.error(`❌ Error fetching transcript for video ${videoId}:`, error);
       return null;
     }
   }
 
+  // Get alternative content for videos without transcripts
+  async getVideoAlternativeContent(videoId: string, videoTitle: string, channelName: string): Promise<string> {
+    try {
+      console.log(`📄 Fetching alternative content for video: ${videoId}`);
+      
+      // Try to get video details from YouTube API
+      const videoDetails = await this.getVideoDetails(videoId);
+      
+      let content = `Video Title: ${videoTitle}\n`;
+      content += `Channel: ${channelName}\n`;
+      
+      if (videoDetails) {
+        content += `Duration: ${videoDetails.duration}\n`;
+        content += `Category: ${videoDetails.category}\n`;
+        content += `Tags: ${videoDetails.tags?.join(', ') || 'None'}\n`;
+        content += `Description: ${videoDetails.description || 'No description available'}\n`;
+      }
+      
+      // Add some context based on the video title
+      content += `\nContext: This appears to be a video about ${this.extractTopicFromTitle(videoTitle)}. `;
+      content += `Based on the title and channel information, this video likely covers topics related to ${channelName}'s typical content.`;
+      
+      console.log(`✅ Alternative content generated. Length: ${content.length} characters`);
+      return content;
+      
+    } catch (error) {
+      console.error(`❌ Error generating alternative content:`, error);
+      return this.getFallbackContent(videoTitle, channelName);
+    }
+  }
+
+  // Get video details from YouTube API
+  private async getVideoDetails(videoId: string): Promise<any> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/videos?part=snippet,contentDetails,statistics&id=${videoId}&key=${this.apiKey}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch video details: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (data.items && data.items.length > 0) {
+        const video = data.items[0];
+        return {
+          duration: this.formatDuration(video.contentDetails.duration),
+          category: video.snippet.categoryId,
+          tags: video.snippet.tags,
+          description: video.snippet.description,
+          viewCount: video.statistics.viewCount,
+          likeCount: video.statistics.likeCount
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching video details:', error);
+      return null;
+    }
+  }
+
+  // Extract topic from video title
+  private extractTopicFromTitle(title: string): string {
+    const commonTopics = [
+      'tutorial', 'guide', 'review', 'comparison', 'unboxing', 'setup',
+      'coding', 'programming', 'development', 'design', 'art', 'music',
+      'gaming', 'tech', 'technology', 'science', 'education', 'news',
+      'vlog', 'podcast', 'interview', 'lecture', 'presentation'
+    ];
+    
+    const lowerTitle = title.toLowerCase();
+    for (const topic of commonTopics) {
+      if (lowerTitle.includes(topic)) {
+        return topic;
+      }
+    }
+    
+    return 'general content';
+  }
+
+  // Format duration from ISO 8601 format
+  private formatDuration(duration: string): string {
+    const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+    if (!match) return 'Unknown';
+    
+    const hours = (match[1] || '').replace('H', '');
+    const minutes = (match[2] || '').replace('M', '');
+    const seconds = (match[3] || '').replace('S', '');
+    
+    let result = '';
+    if (hours) result += `${hours}:`;
+    result += `${minutes.padStart(2, '0')}:`;
+    result += seconds.padStart(2, '0');
+    
+    return result;
+  }
+
+  // Fallback content when all else fails
+  private getFallbackContent(videoTitle: string, channelName: string): string {
+    return `Video Title: ${videoTitle}
+Channel: ${channelName}
+Content Type: Video content from ${channelName}
+Description: This video appears to be content from the ${channelName} channel. The title suggests it covers topics related to ${this.extractTopicFromTitle(videoTitle)}. Without a transcript or detailed description, this summary is based on the available metadata and channel context.`;
+  }
+
   // Get videos from multiple channels
   async getVideosFromChannels(channelIds: string[]): Promise<YouTubeVideo[]> {
+    console.log('🎬 Fetching videos from channels:', channelIds.length);
     const allVideos: YouTubeVideo[] = [];
     
     for (const channelId of channelIds) {
       try {
+        console.log(`📺 Fetching videos for channel: ${channelId}`);
         const videos = await this.getChannelVideos(channelId, 5);
+        console.log(`✅ Got ${videos.length} videos from channel ${channelId}`);
         allVideos.push(...videos);
       } catch (error) {
-        console.error(`Error fetching videos for channel ${channelId}:`, error);
+        console.error(`❌ Error fetching videos for channel ${channelId}:`, error);
       }
     }
 
+    console.log(`📊 Total videos collected: ${allVideos.length}`);
+    
     // Sort by published date (newest first)
-    return allVideos.sort((a, b) => 
+    const sortedVideos = allVideos.sort((a, b) => 
       new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
     );
+    
+    console.log('📅 Videos sorted by date (newest first)');
+    return sortedVideos;
   }
 
   // Helper method to format published date
@@ -149,7 +290,7 @@ class YouTubeAPI {
     }
   }
 
-  // Mock data fallbacks
+  // Mock data fallbacks for development
   private getMockChannels(): YouTubeChannel[] {
     return [
       { id: '1', name: 'Marques Brownlee', avatarUrl: 'https://placehold.co/40x40.png', avatarHint: 'man tech', enabled: true },
@@ -158,13 +299,6 @@ class YouTubeAPI {
       { id: '4', name: 'Fireship', avatarUrl: 'https://placehold.co/40x40.png', avatarHint: 'code fire', enabled: true },
       { id: '5', name: 'Veritasium', avatarUrl: 'https://placehold.co/40x40.png', avatarHint: 'science man', enabled: true },
     ];
-  }
-
-  private getMockTranscript(videoId: string): VideoTranscript {
-    return {
-      text: `This is a mock transcript for video ${videoId}. In a real implementation, this would contain the actual transcript from the YouTube video. The transcript would be used by the AI to generate a summary of the video content.`,
-      language: 'en'
-    };
   }
 }
 

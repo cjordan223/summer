@@ -30,9 +30,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  experimental: {
-    serverComponentsExternalPackages: ['genkit'],
-  },
+  serverExternalPackages: ['genkit'],
 };
 
 export default nextConfig;

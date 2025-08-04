@@ -55,7 +55,7 @@ Edit `.env.local` and add your API keys:
 NEXT_PUBLIC_YOUTUBE_API_KEY=your_youtube_api_key_here
 
 # Google AI API Key (for Gemini)
-GEMINI_API_KEY=your_gemini_api_key_here
+GOOGLE_AI_API_KEY=your_google_ai_api_key_here
 
 # NextAuth.js Configuration
 GOOGLE_CLIENT_ID=your_google_client_id_here
@@ -101,6 +101,43 @@ npm run dev
 npm run genkit:dev
 ```
 
+## 🤖 AI Summary Generation
+
+The application now supports real AI-powered video summaries! Here's how it works:
+
+### How It Works
+
+1. **Video Transcript Fetching**: Uses the `youtube-transcript-api` library to extract captions from YouTube videos
+2. **AI Processing**: Sends the transcript to Google Gemini 2.0 Flash for intelligent summarization
+3. **Real-time Generation**: Click the "AI Summary" button on any video card to generate a new summary
+4. **Error Handling**: Graceful fallbacks if transcripts aren't available or AI service is down
+
+### API Keys Required
+
+Make sure you have these environment variables set:
+
+```env
+# Required for AI summaries
+GOOGLE_AI_API_KEY=your_google_ai_api_key_here
+
+# Required for YouTube data
+NEXT_PUBLIC_YOUTUBE_API_KEY=your_youtube_api_key_here
+```
+
+### Testing the AI Summaries
+
+1. Start the development server: `npm run dev`
+2. Sign in with your Google account
+3. Navigate to the dashboard
+4. Click the "AI Summary" button on any video card
+5. Watch as the AI generates a real summary from the video transcript!
+
+### Troubleshooting
+
+- **"No transcript available"**: Some videos don't have captions. Try videos with auto-generated or manual captions
+- **"AI service temporarily unavailable"**: Check your `GOOGLE_AI_API_KEY` is valid and has quota remaining
+- **"Failed to generate AI summary"**: Check the browser console for detailed error messages
+
 The app will be available at `http://localhost:9002`
 
 ## 📁 Project Structure
@@ -141,7 +178,7 @@ src/
 2. Connect your repository to Vercel
 3. Add environment variables in Vercel dashboard:
    - `NEXT_PUBLIC_YOUTUBE_API_KEY`
-   - `GEMINI_API_KEY`
+   - `GOOGLE_AI_API_KEY`
    - `GOOGLE_CLIENT_ID`
    - `GOOGLE_CLIENT_SECRET`
    - `NEXTAUTH_URL` (set to your domain)

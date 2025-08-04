@@ -103,64 +103,90 @@ class UserService {
   // Generate summary for a video
   async generateVideoSummary(userId: string, video: YouTubeVideo): Promise<UserSummary | null> {
     try {
+      console.log(`🤖 Generating AI summary for: ${video.title}`);
+      
       // Check if summary already exists
       const existingSummary = await this.getSummaryByVideoId(userId, video.id);
       if (existingSummary) {
+        console.log(`✅ Summary already exists for: ${video.title}`);
         return existingSummary;
       }
 
-      // Get video transcript
+      // Get video transcript or alternative content
       const transcript = await youtubeAPI.getVideoTranscript(video.id);
-      if (!transcript) {
-        console.warn('No transcript available for video:', video.id);
-        return null;
+      let content: string;
+      
+      if (transcript) {
+        console.log(`📄 Using transcript (${transcript.text.length} characters)`);
+        content = transcript.text;
+      } else {
+        console.log(`📄 Using alternative content for: ${video.title}`);
+        content = await youtubeAPI.getVideoAlternativeContent(video.id, video.title, video.channelName);
       }
-
+      
       // Generate AI summary
-      let aiSummary;
+      console.log(`🚀 Calling AI API for: ${video.title}`);
+      
       try {
-        aiSummary = await summarizeVideo({
-          transcript: transcript.text,
-          videoTitle: video.title,
+        const { summarizeVideo } = await import('@/ai/flows/summarize-video');
+        const aiSummary = await summarizeVideo({
+          transcript: content,
+          videoTitle: video.title
         });
-      } catch (error) {
-        console.error('Error generating AI summary:', error);
-        // Fallback summary
-        aiSummary = {
-          summary: `• ${video.title} - Summary generation failed.\n• This could be due to AI service overload or transcript issues.\n• Please try again later.`
+        
+        console.log(`✅ AI summary generated successfully`);
+        
+        // Create and save summary
+        const summary = this.createSummaryObject(video, aiSummary.summary);
+        await this.saveSummary(userId, summary);
+        
+        return summary;
+      } catch (aiError) {
+        console.error('❌ AI summary generation failed:', aiError);
+        
+        // Create fallback summary
+        const fallbackSummary = {
+          summary: `• Summary generation failed for: ${video.title}\n• Please try again later`
         };
+        
+        const summary = this.createSummaryObject(video, fallbackSummary.summary);
+        await this.saveSummary(userId, summary);
+        
+        return summary;
       }
-
-      // Create summary object
-      const summary: UserSummary = {
-        id: `${video.id}_${Date.now()}`, // Simple ID generation
-        videoId: video.id,
-        videoTitle: video.title,
-        channelName: video.channelName,
-        thumbnailUrl: video.thumbnailUrl,
-        thumbnailHint: video.thumbnailHint,
-        summaryPoints: aiSummary.summary.split('\n').filter(point => point.trim().length > 0),
-        publishedAt: video.publishedAt,
-        channelAvatarUrl: 'https://placehold.co/40x40.png', // Would need to fetch from channel data
-        channelAvatarHint: video.channelName.toLowerCase().replace(/\s+/g, ' '),
-        createdAt: new Date(),
-      };
-
-      // Save to localStorage
-      const storageKey = this.getStorageKey(userId, 'summaries');
-      const stored = localStorage.getItem(storageKey);
-      const data = stored ? JSON.parse(stored) : { summaries: [] };
-      data.summaries.push({
-        ...summary,
-        createdAt: summary.createdAt.toISOString(),
-      });
-      localStorage.setItem(storageKey, JSON.stringify(data));
-
-      return summary;
     } catch (error) {
       console.error('Error generating video summary:', error);
       return null;
     }
+  }
+
+  // Helper method to create summary object
+  private createSummaryObject(video: YouTubeVideo, summaryText: string): UserSummary {
+    return {
+      id: `${video.id}_${Date.now()}`,
+      videoId: video.id,
+      videoTitle: video.title,
+      channelName: video.channelName,
+      thumbnailUrl: video.thumbnailUrl,
+      thumbnailHint: video.thumbnailHint,
+      summaryPoints: summaryText.split('\n').filter(point => point.trim().length > 0),
+      publishedAt: video.publishedAt,
+      channelAvatarUrl: 'https://placehold.co/40x40.png',
+      channelAvatarHint: video.channelName.toLowerCase().replace(/\s+/g, ' '),
+      createdAt: new Date(),
+    };
+  }
+
+  // Helper method to save summary to localStorage
+  private async saveSummary(userId: string, summary: UserSummary): Promise<void> {
+    const storageKey = this.getStorageKey(userId, 'summaries');
+    const stored = localStorage.getItem(storageKey);
+    const data = stored ? JSON.parse(stored) : { summaries: [] };
+    data.summaries.push({
+      ...summary,
+      createdAt: summary.createdAt.toISOString(),
+    });
+    localStorage.setItem(storageKey, JSON.stringify(data));
   }
 
   // Get summary by video ID
@@ -177,11 +203,16 @@ class UserService {
   // Sync user's channels and generate summaries
   async syncUserChannels(userId: string, accessToken: string): Promise<void> {
     try {
+      console.log('🔄 Starting channel sync for user:', userId);
+      
       // Get user's current channels
       const currentChannels = await this.getUserChannels(userId);
+      console.log('📺 Current channels in storage:', currentChannels.length);
       
       // Fetch subscribed channels from YouTube
       const subscribedChannels = await youtubeAPI.getSubscribedChannels(accessToken);
+      console.log('📡 Fetched subscribed channels from YouTube:', subscribedChannels.length);
+      console.log('📋 Channel names:', subscribedChannels.map(c => c.name).slice(0, 5), '...');
       
       // Merge with existing preferences
       const mergedChannels = subscribedChannels.map(subChannel => {
@@ -191,49 +222,50 @@ class UserService {
       
       // Save updated channels
       await this.saveUserChannels(userId, mergedChannels);
+      console.log('💾 Saved merged channels to storage');
       
       // Get enabled channel IDs
       const enabledChannelIds = mergedChannels
         .filter(channel => channel.enabled)
         .map(channel => channel.id);
+      console.log('✅ Enabled channels:', enabledChannelIds.length);
+      console.log('🎯 Enabled channel names:', mergedChannels.filter(c => c.enabled).map(c => c.name));
       
       // Fetch recent videos from enabled channels
       const videos = await youtubeAPI.getVideosFromChannels(enabledChannelIds);
+      console.log('🎬 Total videos fetched from all channels:', videos.length);
+      
+      // Log video details for first few videos
+      videos.slice(0, 3).forEach((video, index) => {
+        console.log(`🎥 Video ${index + 1}:`, {
+          title: video.title,
+          channel: video.channelName,
+          published: video.publishedAt,
+          id: video.id
+        });
+      });
+      
+      if (videos.length > 10) {
+        console.log(`⚠️  Found ${videos.length} videos, but only processing first 10 to avoid rate limits`);
+      }
       
       // Generate summaries for new videos
-      for (const video of videos.slice(0, 10)) { // Limit to 10 videos
+      const videosToProcess = videos.slice(0, 10);
+      console.log(`🚀 Processing ${videosToProcess.length} videos for AI summaries`);
+      
+      for (const video of videosToProcess) {
+        console.log(`📝 Processing video: ${video.title} (${video.channelName})`);
         await this.generateVideoSummary(userId, video);
       }
       
-      // If no videos were found, create some mock summaries for testing
+      // If no videos were found, show a message
       if (videos.length === 0) {
-        const mockVideos = [
-          {
-            id: 'mock1',
-            title: 'The Future of AI Technology',
-            channelName: 'Tech Insights',
-            thumbnailUrl: 'https://placehold.co/600x400.png',
-            thumbnailHint: 'ai technology',
-            publishedAt: '2 days ago',
-            description: 'Exploring the latest developments in artificial intelligence.'
-          },
-          {
-            id: 'mock2', 
-            title: 'Building Modern Web Applications',
-            channelName: 'Code Masters',
-            thumbnailUrl: 'https://placehold.co/600x400.png',
-            thumbnailHint: 'web development',
-            publishedAt: '1 week ago',
-            description: 'Learn how to build scalable web applications with modern frameworks.'
-          }
-        ];
-        
-        for (const video of mockVideos) {
-          await this.generateVideoSummary(userId, video);
-        }
+        console.log('❌ No recent videos found from monitored channels');
+      } else {
+        console.log(`✅ Successfully processed ${videosToProcess.length} videos`);
       }
     } catch (error) {
-      console.error('Error syncing user channels:', error);
+      console.error('❌ Error syncing user channels:', error);
       throw error;
     }
   }

@@ -139,8 +139,17 @@ src/
 
 1. Push your code to GitHub
 2. Connect your repository to Vercel
-3. Add environment variables in Vercel dashboard
-4. Deploy!
+3. Add environment variables in Vercel dashboard:
+   - `NEXT_PUBLIC_YOUTUBE_API_KEY`
+   - `GEMINI_API_KEY`
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+   - `NEXTAUTH_URL` (set to your domain)
+   - `NEXTAUTH_SECRET`
+4. Update Google OAuth redirect URIs to include your production domain
+5. Deploy!
+
+**Live Demo**: [https://summer-eight-drab.vercel.app/](https://summer-eight-drab.vercel.app/)
 
 ### Other Platforms
 

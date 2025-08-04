@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "src/ai/flows/summarize-video.ts": {
+      "maxDuration": 30
+    }
+  },
+  "env": {
+    "NEXTAUTH_URL": "https://summer-eight-drab.vercel.app"
+  }
+} 

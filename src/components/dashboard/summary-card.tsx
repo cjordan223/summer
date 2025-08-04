@@ -1,11 +1,12 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { type Summary } from "@/lib/data";
+import { UserSummary } from "@/lib/user-service";
 import Image from "next/image";
-import { ListChecks } from "lucide-react";
+import { ListChecks, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-export function SummaryCard({ summary }: { summary: Summary }) {
+export function SummaryCard({ summary }: { summary: UserSummary }) {
   return (
     <Card className="flex flex-col h-full transition-shadow duration-300 hover:shadow-xl rounded-xl overflow-hidden">
       <div className="aspect-video w-full overflow-hidden">
@@ -49,8 +50,23 @@ export function SummaryCard({ summary }: { summary: Summary }) {
           </AccordionItem>
         </Accordion>
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">{summary.publishedAt}</p>
+        <Button
+          variant="ghost"
+          size="sm"
+          asChild
+          className="h-8 w-8 p-0"
+        >
+          <a
+            href={`https://www.youtube.com/watch?v=${summary.videoId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Watch on YouTube"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        </Button>
       </CardFooter>
     </Card>
   );

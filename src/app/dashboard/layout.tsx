@@ -1,3 +1,5 @@
+'use client';
+
 import { Logo } from "@/components/logo";
 import { ChannelList } from "@/components/dashboard/channel-list";
 import {
@@ -12,13 +14,38 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
-import Link from 'next/link';
+import { useAuth } from "@/lib/auth";
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user, loading, logout } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null; // Will redirect to login
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
   return (
     <SidebarProvider>
       <Sidebar>
@@ -33,17 +60,21 @@ export default function DashboardLayout({
         <SidebarFooter>
           <div className="flex items-center gap-3 p-3 border-t">
             <Avatar className="h-9 w-9">
-              <AvatarImage src="https://placehold.co/40x40.png" alt="User" data-ai-hint="person" />
-              <AvatarFallback>U</AvatarFallback>
+              <AvatarImage src={user.photoURL || undefined} alt={user.displayName || "User"} data-ai-hint="person" />
+              <AvatarFallback>{user.displayName?.[0] || user.email?.[0] || "U"}</AvatarFallback>
             </Avatar>
             <div className="flex-1">
-              <p className="text-sm font-semibold truncate">Summer User</p>
-              <p className="text-xs text-muted-foreground truncate">user@example.com</p>
+              <p className="text-sm font-semibold truncate">{user.displayName || "User"}</p>
+              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
             </div>
-            <Button asChild variant="ghost" size="icon" className="rounded-full flex-shrink-0">
-                <Link href="/" aria-label="Log out">
-                    <LogOut className="w-4 h-4" />
-                </Link>
+            <Button 
+              onClick={handleLogout}
+              variant="ghost" 
+              size="icon" 
+              className="rounded-full flex-shrink-0"
+              aria-label="Log out"
+            >
+              <LogOut className="w-4 h-4" />
             </Button>
           </div>
         </SidebarFooter>

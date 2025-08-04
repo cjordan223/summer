@@ -1,7 +1,11 @@
+'use client';
+
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
-import Link from "next/link";
+import { useAuth } from "@/lib/auth";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg role="img" viewBox="0 0 24 24" {...props}>
@@ -13,6 +17,38 @@ const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export default function LoginPage() {
+  const { user, loading, signInWithGoogle } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (user && !loading) {
+      router.push('/dashboard');
+    }
+  }, [user, loading, router]);
+
+  const handleSignIn = async () => {
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      console.error('Sign in error:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (user) {
+    return null; // Will redirect to dashboard
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="w-full max-w-md p-8">
@@ -26,11 +62,14 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild className="w-full transition-transform duration-300 hover:scale-105" variant="default" size="lg">
-              <Link href="/dashboard">
-                <GoogleIcon className="mr-2 h-5 w-5" />
-                Sign in with Google
-              </Link>
+            <Button 
+              onClick={handleSignIn}
+              className="w-full transition-transform duration-300 hover:scale-105" 
+              variant="default" 
+              size="lg"
+            >
+              <GoogleIcon className="mr-2 h-5 w-5" />
+              Sign in with Google
             </Button>
           </CardContent>
           <CardFooter>
